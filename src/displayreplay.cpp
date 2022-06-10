@@ -37,16 +37,19 @@ using namespace std;
 
 #ifndef NO_OPENGL
 
-static string inprefix, outprefix;
+extern string inprefix;
+extern string outprefix;
 static int frameskip;
 
 static bool running = false;
 
 static void reload () {
+	Annotation::list.clear();
     int fullframe = ::frame*::frameskip;
+    sim.frame = ::frame;
     sim.time = fullframe * sim.frame_time;
-    load_objs(sim.cloth_meshes, stringf("%s/%04d",inprefix.c_str(), fullframe));
-    if (sim.cloth_meshes[0]->verts.empty()) {
+    if (!load_state(sim, stringf("%s/%05d",inprefix.c_str(), fullframe)) ||
+        sim.cloth_meshes[0]->verts.empty()) {
         if (::frame == 0)
             exit(EXIT_FAILURE);
         if (!outprefix.empty())
@@ -54,7 +57,7 @@ static void reload () {
         ::frame = 0;
         reload();
     }
-    for (int o = 0; o < sim.obstacles.size(); o++)
+    for (int o = 0; o < (int)sim.obstacles.size(); o++)
         sim.obstacles[o].get_mesh(sim.time);
 }
 
@@ -64,10 +67,10 @@ static void idle () {
     fps.tick();
     if (!outprefix.empty()) {
         char filename[256];
-        snprintf(filename, 256, "%s/%04d.png", outprefix.c_str(), ::frame);
+        snprintf(filename, 256, "%s/%05d.png", outprefix.c_str(), ::frame );
         save_screenshot(filename);
     }
-    ::frame++;
+    ::frame += 1;
     reload();
     fps.tock();
     redisplay();
@@ -99,6 +102,47 @@ static void special (int key, int x, int y) {
     redisplay();
 }
 
+static void save_obstacle_transforms (const vector<Obstacle> &obs, int frame,
+                                      double time) {
+    if (!outprefix.empty() && frame < 100000) {
+        for (int o = 0; o < (int)obs.size(); o++) {
+            Transformation trans = identity();
+            if (obs[o].transform_spline)
+                trans = get_dtrans(*obs[o].transform_spline, time).first;
+            save_transformation(trans, stringf("%s/%05dobs%02d.txt",
+                                               outprefix.c_str(), frame, o));
+        }
+    }
+}
+
+void generate_obj (const vector<string> &args) {
+    if (args.size() < 1 || args.size() > 2) {
+        cout << "Generates output meshes from saved simulation state." << endl;
+        cout << "Arguments:" << endl;
+        cout << "    <out-dir>: Directory containing simulation output files"
+             << endl;
+        exit(EXIT_FAILURE);
+    }
+    ::inprefix = args[0];
+    ::outprefix = args[0];
+    ::frameskip = 1;
+    if (!::outprefix.empty())
+        ensure_existing_directory(::outprefix);
+    char config_backup_name[256];
+    snprintf(config_backup_name, 256, "%s/%s", inprefix.c_str(), "conf.json");
+    load_json(config_backup_name, sim);
+    prepare(sim);
+    
+    for (;;) {
+        reload();
+        char filename[256];
+        snprintf(filename, 256, "%s/%05d", inprefix.c_str(), ::frame);
+        save_objs(sim.cloth_meshes, filename);
+        save_obstacle_transforms(sim.obstacles, frame, sim.time);
+        ::frame += 1;
+    }
+}
+
 void display_replay (const vector<string> &args) {
     if (args.size() < 1 || args.size() > 2) {
         cout << "Replays the results of a simulation." << endl;
@@ -122,7 +166,8 @@ void display_replay (const vector<string> &args) {
     cb.idle = idle;
     cb.keyboard = keyboard;
     cb.special = special;
-    run_glut(cb);
+    init_glut(cb);
+    run_glut();
 }
 
 #else

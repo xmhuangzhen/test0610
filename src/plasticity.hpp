@@ -35,9 +35,8 @@ void plastic_update (Cloth &cloth);
 
 void optimize_plastic_embedding (Cloth &cloth);
 
-struct Residual {Mat2x2 S_res; double damage;};
-std::vector<Residual> back_up_residuals (Mesh &mesh);
-void restore_residuals (Mesh &mesh, const Mesh &old_mesh,
-                        const std::vector<Residual> &res);
+void recompute_Sp_bend (Face *face);
+
+Mat3x3 stretch_plasticity_from_embedding(const Face *face);
 
 #endif

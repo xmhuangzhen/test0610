@@ -48,6 +48,7 @@
 #include "util.hpp"
 #include <float.h>
 #include <stdlib.h>
+#include <map>
 
 #define MAX(a,b)	((a) > (b) ? (a) : (b))
 #define MIN(a,b)	((a) < (b) ? (a) : (b))
@@ -284,8 +285,8 @@ public:
 
 public:
 	DeformBVHNode();
-	DeformBVHNode(DeformBVHNode *, Face *, BOX *, vec3f *);
-	DeformBVHNode(DeformBVHNode *, Face **, unsigned int, BOX *, vec3f *);
+	DeformBVHNode(DeformBVHNode *, Face *, std::map<Face*,BOX>&);
+	DeformBVHNode(DeformBVHNode *, Face **, unsigned int, std::map<Face*,BOX>&, std::map<Face*,vec3f>&);
 
 	~DeformBVHNode();
 

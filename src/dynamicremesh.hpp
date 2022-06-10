@@ -31,9 +31,15 @@
 #include "cloth.hpp"
 #include "nearobs.hpp"
 
-void static_remesh (Cloth &cloth);
+class MeshSubset;
 
-void dynamic_remesh (Cloth &cloth, const std::vector<Plane> &planes,
-                     bool plasticity);
+void static_remesh (Mesh& mesh);
+
+void dynamic_remesh (Mesh& mesh, const std::map<Node*,Plane> &planes);
+void dynamic_remesh (MeshSubset& subset, const std::map<Node*,Plane> &planes);
+
+Mat3x3 compute_face_sizing (Remeshing& remeshing, const Face *face, 
+                            const std::map<Node*,Plane> &planes, bool debug = false);
+
 
 #endif

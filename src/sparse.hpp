@@ -108,7 +108,7 @@ inline void debug_save_spmat (const SpMat<double> &A) {
     file << "SparseArray[{";
     for (int i = 0; i < A.m; i++) {
         const SpVec<double> &row = A.rows[i];
-        for (int jj = 0; jj < row.indices.size(); jj++) {
+        for (int jj = 0; jj < (int)row.indices.size(); jj++) {
             int j = row.indices[jj];
             const double &aij = row.entries[jj];
             file << (i==0 && jj==0 ? "" : ", ") << "{" << i+1 << "," << j+1

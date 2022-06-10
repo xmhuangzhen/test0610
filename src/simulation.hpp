@@ -49,9 +49,10 @@ struct Simulation {
     int frame, step;
     std::vector<Cloth> cloths;
     // constants
-    int frame_steps;
+    int frame_steps, save_every;
     double frame_time, step_time;
     double end_time, end_frame;
+    double passive_time;
     std::vector<Motion> motions;
     std::vector<Handle*> handles;
     std::vector<Obstacle> obstacles;
@@ -60,12 +61,13 @@ struct Simulation {
     Wind wind;
     double friction, obs_friction;
     enum {Proximity, Physics, StrainLimiting, Collision, Remeshing, Separation,
-          PopFilter, Plasticity, nModules};
+          PopFilter, Plasticity, Fracture, nModules};
     bool enabled[nModules];
     Timer timers[nModules];
     // handy pointers
     std::vector<Mesh*> cloth_meshes, obstacle_meshes;
 };
+extern Simulation sim;
 
 void prepare (Simulation &sim);
 
@@ -74,14 +76,5 @@ void relax_initial_state (Simulation &sim);
 void advance_frame (Simulation &sim);
 
 void advance_step (Simulation &sim);
-
-// Helper functions
-
-template <typename Prim> int size (const std::vector<Mesh*> &meshes);
-template <typename Prim> int get_index (const Prim *p,
-                                        const std::vector<Mesh*> &meshes);
-template <typename Prim> Prim *get (int i, const std::vector<Mesh*> &meshes);
-
-std::vector<Vec3> node_positions (const std::vector<Mesh*> &meshes);
 
 #endif

@@ -37,8 +37,8 @@ static const NLOpt *problem;
 static void nlcg_value_and_grad (const real_1d_array &x, double &value,
                                  real_1d_array &grad, void *ptr=NULL);
 
-void nonlinear_conjugate_gradients (const NLOpt &problem, OptOptions opt,
-                                    bool verbose) {
+void nonlinear_conjugate_gradient_method (const NLOpt &problem, OptOptions opt,
+                                          bool verbose) {
     ::problem = &problem;
     real_1d_array x;
     x.setlength(::problem->nvar);
@@ -55,10 +55,10 @@ void nonlinear_conjugate_gradients (const NLOpt &problem, OptOptions opt,
     ::problem->finalize(&x[0]);
 }
 
-static void add (real_1d_array &x, const vector<double> &y) {
-    for (int i = 0; i < y.size(); i++)
+/*static void add (real_1d_array &x, const vector<double> &y) {
+    for (int i = 0; i < (int)y.size(); i++)
         x[i] += y[i];
-}
+}*/
 
 static void nlcg_value_and_grad (const real_1d_array &x, double &value,
                                  real_1d_array &grad, void *ptr) {

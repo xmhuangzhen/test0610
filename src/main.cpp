@@ -38,6 +38,8 @@ using namespace std;
 extern void debug (const vector<string> &args);
 
 int main (int argc, char **argv) {
+	srand(34573498);
+	
     struct Action {
         string name;
         void (*run) (const vector<string> &args);
@@ -48,6 +50,7 @@ int main (int argc, char **argv) {
         {"resumeoffline", resume_physics},
         {"replay", display_replay},
         {"merge", merge_meshes},
+        {"generate", generate_obj},
         {"split", split_meshes},
         {"test", display_testing},
         {"tri2obj", tri2obj},

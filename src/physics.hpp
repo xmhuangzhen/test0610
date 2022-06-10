@@ -32,8 +32,12 @@
 #include "simulation.hpp"
 #include <vector>
 
-template <Space s>
-double internal_energy (const Cloth &cloth);
+template <Space s> Mat3x3 deformation_gradient (const Face *face);
+
+Mat3x3 material_model (const Face *face, const Mat3x3& G);
+
+template <Space s> 
+double internal_energy (const std::vector<Face*>& faces, const std::vector<Edge*>& edges);
 
 double constraint_energy (const std::vector<Constraint*> &cons);
 
@@ -44,24 +48,25 @@ double external_energy (const Cloth &cloth, const Vec3 &gravity,
 // also adds damping terms
 // if dt == 0, just does A += dF/dx; b += F instead, no damping
 template <Space s>
-void add_internal_forces (const Cloth &cloth, SpMat<Mat3x3> &A,
-                          std::vector<Vec3> &b, double dt);
+void add_internal_forces (const std::vector<Face*>& faces, const std::vector<Edge*>& edges,
+						  SpMat<Mat3x3> &A, std::vector<Vec3> &b, double dt);
 
-void add_constraint_forces (const Cloth &cloth,
-                            const std::vector<Constraint*> &cons,
+void add_constraint_forces (const std::vector<Constraint*> &cons,
                             SpMat<Mat3x3> &A, std::vector<Vec3> &b, double dt);
 
-void add_external_forces (const Cloth &cloth, const Vec3 &gravity,
-                          const Wind &wind, std::vector<Vec3> &fext,
+void add_external_forces (const std::vector<Node*>& nodes, const std::vector<Face*>& faces, 
+						  const Vec3 &gravity, const Wind &wind, std::vector<Vec3> &fext,
                           std::vector<Mat3x3> &Jext);
 
 void add_morph_forces (const Cloth &cloth, const Morph &morph, double t,
                        double dt,
                        std::vector<Vec3> &fext, std::vector<Mat3x3> &Jext);
 
-void implicit_update (Cloth &cloth, const std::vector<Vec3> &fext,
-                      const std::vector<Mat3x3> &Jext,
-                      const std::vector<Constraint*> &cons, double dt,
-                      bool update_positions=true);
+std::vector<Vec3> implicit_update (std::vector<Node*>& nodes, const std::vector<Edge*>& edges, 
+					  const std::vector<Face*>& faces,
+					  const std::vector<Vec3> &fext, const std::vector<Mat3x3> &Jext,
+                      const std::vector<Constraint*> &cons, double dt);
+
+void project_outside (std::vector<Node*>& nodes, const std::vector<Constraint*> &cons);
 
 #endif

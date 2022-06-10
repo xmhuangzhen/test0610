@@ -47,21 +47,12 @@ template <int n> Vec<n> random () {
 }
 
 static void recover_plasticity (Mesh &mesh) {
-    for (int f = 0; f < mesh.faces.size(); f++)
-        mesh.faces[f]->S_plastic = curvature<PS>(mesh.faces[f]);
+    for (int f = 0; f < (int)mesh.faces.size(); f++)
+        mesh.faces[f]->Sp_bend = curvature<PS>(mesh.faces[f]);
 }
 
 static void remeshing_step (Cloth &cloth) {
-    // copy old meshes
-    Mesh old_mesh = deep_copy(cloth.mesh);
-    // back up residuals
-    vector<Residual> res = back_up_residuals(cloth.mesh);
-    // remesh
-    dynamic_remesh(cloth, vector<Plane>(), false);
-    // restore residuals
-    restore_residuals(cloth.mesh, old_mesh, res);
-    // delete old meshes
-    delete_mesh(old_mesh);
+    dynamic_remesh(cloth.mesh, map<Node*,Plane>());
 }
 
 static void keyboard (unsigned char key, int x, int y) {
@@ -91,7 +82,8 @@ void display_testing (const vector<string> &args) {
     load_obj(*sim.cloth_meshes[0], meshfile);
     GlutCallbacks cb;
     cb.keyboard = keyboard;
-    run_glut(cb);
+    init_glut(cb);
+    run_glut();
 }
 
 #else

@@ -210,11 +210,11 @@ Transformation bodyframe_to_transformation(const BodyFrame& bodyFrame) {
 
 vector<vector<Transformation> > body_vector_to_transforms(BodyVector& bodies) {
     vector<vector<Transformation> > body_transforms(bodies.size());
-    for(int body_i = 0; body_i < bodies.size(); ++body_i) {
+    for(int body_i = 0; body_i < (int)bodies.size(); ++body_i) {
         const BodyFrameVector& curr_body = bodies[body_i];
         // Initialize new vector
         body_transforms[body_i] = vector<Transformation>(curr_body.size());
-        for(int frame_i = 0; frame_i < curr_body.size(); ++frame_i) {
+        for(int frame_i = 0; frame_i < (int)curr_body.size(); ++frame_i) {
             Transformation tr = bodyframe_to_transformation(curr_body[frame_i]);
             body_transforms[body_i][frame_i] = tr;
         }

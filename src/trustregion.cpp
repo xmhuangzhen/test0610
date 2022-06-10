@@ -92,7 +92,7 @@ double line_circle_intersection (double n1, double n2, double d, double r);
 
 bool minimize_in_ball (const vector<double> &g, const SpMat<double> &H,
                        double radius, vector<double> &p) {
-    int n = g.size();
+    //int n = g.size();
     static vector<double> p1, p2;
     scalar_mult(p1, -dot(g, g)/dot(g, H, g), g);
     p2 = taucs_linear_solve(H, g);
@@ -164,7 +164,7 @@ static double dot (const vector<double> &x, const SpMat<double> &A,
     for (int i = 0; i < n; i++) {
         double Ayi = 0;
         const SpVec<double> &Ai = A.rows[i];
-        for (int jj = 0; jj < Ai.indices.size(); jj++) {
+        for (int jj = 0; jj < (int)Ai.indices.size(); jj++) {
             int j = Ai.indices[jj];
             double Aij = Ai.entries[jj];
             Ayi += Aij*y[j];

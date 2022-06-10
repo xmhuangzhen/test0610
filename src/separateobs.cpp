@@ -39,8 +39,8 @@ namespace SO {
 
 static const int max_iter = 100;
 
-static vector<Vec3> xold;
-static vector<Vec3> nold;
+static map<const Node*, Vec3> xold;
+static map<const Face*, Vec3> nold;
 
 typedef Vec3 Bary; // barycentric coordinates
 
@@ -50,7 +50,7 @@ struct Ixn {// intersection
     Vec3 n;
     Ixn () {}
     Ixn (const Face *f0, const Bary &b0, const Face *f1, const Bary &b1,
-         const Vec3 &n): f0((Face*)f0), b0(b0), f1((Face*)f1), b1(b1), n(n) {}
+         const Vec3 &n): f0((Face*)f0), f1((Face*)f1), b0(b0), b1(b1), n(n) {}
 };
 
 ostream &operator<< (ostream &out, const Ixn &ixn) {out << ixn.f0 << "@" << ixn.b0 << " " << ixn.f1 << "@" << ixn.b1 << " " << ixn.n; return out;}
@@ -62,20 +62,21 @@ vector<Ixn> find_intersections (const vector<AccelStruct*> &obs_accs,
 
 void solve_ixns (const vector<Ixn> &ixns);
 
-vector<Vec3> face_normals (const vector<Mesh*> &meshes) {
-    int nf = size<Face>(meshes);
-    vector<Vec3> n(nf);
-    for (int f = 0; f < nf; f++)
-        n[f] = get<Face>(f, meshes)->n;
-    return n;
+void build_face_normal_lookup(map<const Face*,Vec3>& nmap, const vector<Mesh*>& meshes) {
+	for (size_t i=0; i<meshes.size(); i++)
+    	for (size_t j=0; j<meshes[i]->faces.size(); j++)
+    		nmap[meshes[i]->faces[j]] = meshes[i]->faces[j]->n;
+
 }
 
 void separate_obstacles (vector<Mesh*> &obs_meshes,
                          const vector<Mesh*> &meshes) {
-    ::obs_meshes = &obs_meshes;
-    ::meshes = &meshes;
-    SO::xold = node_positions(obs_meshes);
-    SO::nold = face_normals(obs_meshes);
+    
+    SO::xold.clear();
+    SO::nold.clear();
+    build_node_lookup(SO::xold, obs_meshes);
+	build_face_normal_lookup(SO::nold, obs_meshes);
+
     vector<AccelStruct*> obs_accs = create_accel_structs(obs_meshes, false),
                          accs = create_accel_structs(meshes, false);
     vector<Ixn> ixns;
@@ -88,7 +89,7 @@ void separate_obstacles (vector<Mesh*> &obs_meshes,
             break;
         append(ixns, new_ixns);
         solve_ixns(ixns);
-        for (int m = 0; m < obs_meshes.size(); m++) {
+        for (int m = 0; m < (int)obs_meshes.size(); m++) {
             compute_ws_data(*obs_meshes[m]);
             update_accel_struct(*obs_accs[m]);
         }
@@ -97,7 +98,7 @@ void separate_obstacles (vector<Mesh*> &obs_meshes,
         cerr << "Initial separation failed to converge!" << endl;
         exit(1);
     }
-    for (int m = 0; m < obs_meshes.size(); m++) {
+    for (int m = 0; m < (int)obs_meshes.size(); m++) {
         compute_ws_data(*obs_meshes[m]);
         update_x0(*obs_meshes[m]);
     }
@@ -158,7 +159,7 @@ void find_face_intersection (const Face *face0, const Face *face1) {
     bool is_ixn = intersection_midpoint(face0, face1, b0, b1);
     if (!is_ixn)
         return;
-    Vec3 n = -normalize(face0->n/2. + SO::nold[get_index(face0,*::obs_meshes)]);
+    Vec3 n = -normalize(face0->n/2. + SO::nold[face0]);
     farthest_points(face0, face1, n, b0, b1);
     SO::ixns[t].push_back(Ixn(face0, b0, face1, b1, n));
 }
@@ -306,7 +307,7 @@ struct SeparationOpt: public NLConOpt {
     vector<Node*> nodes;
     double inv_m;
     SeparationOpt (const vector<Ixn> &ixns): ixns(ixns), inv_m(0) {
-        for (int i = 0; i < ixns.size(); i++) {
+        for (int i = 0; i < (int)ixns.size(); i++) {
             assert(!is_free(ixns[i].f0));
             assert(is_free(ixns[i].f1));
             for (int v = 0; v < 3; v++)
@@ -329,24 +330,24 @@ void solve_ixns (const vector<Ixn> &ixns) {
 }
 
 void SeparationOpt::initialize (double *x) const {
-    for (int n = 0; n < nodes.size(); n++)
+    for (int n = 0; n < (int)nodes.size(); n++)
         set_subvec(x, n, nodes[n]->x);
 }
 
 double SeparationOpt::objective (const double *x) const {
     double f = 0;
-    for (int n = 0; n < nodes.size(); n++) {
+    for (int n = 0; n < (int)nodes.size(); n++) {
         const Node *node = nodes[n];
-        Vec3 dx = get_subvec(x, n) - SO::xold[get_index(node, *::obs_meshes)];
+        Vec3 dx = get_subvec(x, n) - SO::xold[node];
         f += inv_m*dot(dx,dx)/2;
     }
     return f;
 }
 
 void SeparationOpt::obj_grad (const double *x, double *grad) const {
-    for (int n = 0; n < nodes.size(); n++) {
+    for (int n = 0; n < (int)nodes.size(); n++) {
         const Node *node = nodes[n];
-        Vec3 dx = get_subvec(x, n) - SO::xold[get_index(node, *::obs_meshes)];
+        Vec3 dx = get_subvec(x, n) - SO::xold[node];
         set_subvec(grad, n, inv_m*dx);
     }
 }
@@ -380,7 +381,7 @@ void SeparationOpt::con_grad (const double *x, int j, double factor,
 }
 
 void SeparationOpt::finalize (const double *x) const {
-    for (int n = 0; n < nodes.size(); n++)
+    for (int n = 0; n < (int)nodes.size(); n++)
         nodes[n]->x = get_subvec(x, n);
 }
 

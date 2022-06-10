@@ -39,7 +39,7 @@
 
 using namespace std;
 
-static string outprefix;
+string inprefix, outprefix;
 static fstream timingfile;
 
 Simulation sim;
@@ -59,33 +59,21 @@ void init_physics (const string &json_file, string outprefix,
         copy_file(json_file.c_str(), stringf("%s/conf.json",outprefix.c_str()));
         // And copy over all the obstacles
         vector<Mesh*> base_meshes(sim.obstacles.size());
-        for (int o = 0; o < sim.obstacles.size(); o++)
+        for (int o = 0; o < (int)sim.obstacles.size(); o++)
             base_meshes[o] = &sim.obstacles[o].base_mesh;
         save_objs(base_meshes, stringf("%s/obs", outprefix.c_str()));
     }
-    prepare(sim);
-    if (!is_reloading) {
-        separate_obstacles(sim.obstacle_meshes, sim.cloth_meshes);
-        relax_initial_state(sim);
-    }
+    prepare(sim);    
 }
 
-static void save (const vector<Mesh*> &meshes, int frame) {
-    if (!outprefix.empty() && frame < 10000)
-        save_objs(meshes, stringf("%s/%04d", outprefix.c_str(), frame));
+void init_relax() {
+	separate_obstacles(sim.obstacle_meshes, sim.cloth_meshes);
+    relax_initial_state(sim);    
 }
 
-static void save_obstacle_transforms (const vector<Obstacle> &obs, int frame,
-                                      double time) {
-    if (!outprefix.empty() && frame < 10000) {
-        for (int o = 0; o < obs.size(); o++) {
-            Transformation trans = identity();
-            if (obs[o].transform_spline)
-                trans = get_dtrans(*obs[o].transform_spline, time).first;
-            save_transformation(trans, stringf("%s/%04dobs%02d.txt",
-                                               outprefix.c_str(), frame, o));
-        }
-    }
+static void save (vector<Mesh*> &meshes, int frame) {
+    if (!outprefix.empty() && frame < 100000)
+        save_state(sim, stringf("%s/%05d", outprefix.c_str(), frame));
 }
 
 static void save_timings () {
@@ -100,15 +88,14 @@ static void save_timings () {
     out << endl;
 }
 
-void save (const Simulation &sim, int frame) {
+void save (Simulation &sim, int frame) {
     save(sim.cloth_meshes, frame);
-    save_obstacle_transforms(sim.obstacles, frame, sim.time);
 }
 
 void sim_step() {
     fps.tick();
     advance_step(sim);
-    if (sim.step % sim.frame_steps == 0) {
+    if ((sim.step % sim.frame_steps == 0) && (sim.step % sim.save_every) == 0) {
         save(sim, sim.frame);
         save_timings();
     }
@@ -136,6 +123,7 @@ void run_physics (const vector<string> &args) {
     if (!outprefix.empty())
         ensure_existing_directory(outprefix);
     init_physics(json_file, outprefix, false);
+    init_relax();
     if (!outprefix.empty())
         save(sim, 0);
     offline_loop();
@@ -149,13 +137,14 @@ void init_resume(const vector<string> &args) {
     init_physics(stringf("%s/conf.json", outprefix.c_str()), outprefix, true);
     // Get the initialization information
     sim.frame = atoi(start_frame_str.c_str());
-    sim.time = sim.frame * sim.frame_time;
+    for (int i=0; i<sim.frame; i++)
+    	sim.time += sim.frame_time;
     sim.step = sim.frame * sim.frame_steps;
-    for(int i=0; i<sim.obstacles.size(); ++i)
+    for(int i=0; i<(int)sim.obstacles.size(); ++i)
         sim.obstacles[i].get_mesh(sim.time);
-    load_objs(sim.cloth_meshes, stringf("%s/%04d",outprefix.c_str(),sim.frame));
-    prepare(sim); // re-prepare the new cloth meshes
-    separate_obstacles(sim.obstacle_meshes, sim.cloth_meshes);
+    prepare(sim); // set cloth meshes etc.
+    load_state(sim, stringf("%s/%05d",outprefix.c_str(),sim.frame));
+    //separate_obstacles(sim.obstacle_meshes, sim.cloth_meshes);
 }
 
 void resume_physics (const vector<string> &args) {
@@ -172,6 +161,7 @@ void resume_physics (const vector<string> &args) {
 }
 
 void copy_file (const string &input, const string &output) {
+    return;
     if(input == output) {
         return;
     }

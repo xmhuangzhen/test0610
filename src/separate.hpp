@@ -29,7 +29,6 @@
 
 #include "mesh.hpp"
 
-void separate (std::vector<Mesh*> &meshes, const std::vector<Mesh*> &old_meshes,
-               const std::vector<Mesh*> &obs_meshes);
+void separate (std::vector<Mesh*> &meshes, const std::vector<Mesh*> &obs_meshes);
 
 #endif

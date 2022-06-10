@@ -74,17 +74,17 @@ T Spline<T>::vel (double t) const {
 
 vector<double> operator+ (const vector<double> &x, const vector<double> &y) {
     vector<double> z(min(x.size(), y.size()));
-    for (int i = 0; i < z.size(); i++) z[i] = x[i] + y[i];
+    for (int i = 0; i < (int)z.size(); i++) z[i] = x[i] + y[i];
     return z;
 }
 vector<double> operator- (const vector<double> &x, const vector<double> &y) {
     vector<double> z(min(x.size(), y.size()));
-    for (int i = 0; i < z.size(); i++) z[i] = x[i] - y[i];
+    for (int i = 0; i < (int)z.size(); i++) z[i] = x[i] - y[i];
     return z;
 }
 vector<double> operator* (const vector<double> &x, double a) {
     vector<double> y(x.size());
-    for (int i = 0; i < y.size(); i++) y[i] = x[i]*a;
+    for (int i = 0; i < (int)y.size(); i++) y[i] = x[i]*a;
     return y;
 }
 vector<double> operator/ (const vector<double> &x, double a) {return x*(1/a);}

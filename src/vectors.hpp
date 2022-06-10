@@ -31,6 +31,8 @@
 
 #include <cmath>
 #include <iostream>
+#include <zlib.h>
+
 
 // aa: if defined, AVX SIMD doubles will be used for vector math.
 //#define _AVX
@@ -86,6 +88,7 @@ public:
     explicit Vec (T x, T y) {static_assert(n==2); c[0] = x; c[1] = y;}
     explicit Vec (T x, T y, T z) {static_assert(n==3); c[0] = x; c[1] = y; c[2] = z;}
     explicit Vec (T x, T y, T z, T w) {static_assert(n==4); c[0] = x; c[1] = y; c[2] = z; c[3] = w;}
+    explicit Vec (T v0, T v1, T v2, T v3, T v4, T v5) {static_assert(n==6); c[0] = v0; c[1] = v1; c[2] = v2; c[3] = v3; c[4] = v4; c[5] = v5; }
     T &operator[] (int i) {return c[i];}
     const T &operator[] (int i) const {return c[i];}
 };
@@ -109,8 +112,13 @@ tpl VecnT normalize (const VecnT &u) {T m = norm(u); return m==0 ? VecnT(0) : u/
 tpl std::ostream &operator<< (std::ostream &out, const VecnT &u) {out << "("; for (int i = 0; i < n; i++) out << (i==0?"":", ") << u[i]; out << ")"; return out;}
 template <typename T> Vec<3,T> cross (const Vec<3,T> &u, const Vec<3,T> &v) {Vec<3,T> w; w[0] = u[1]*v[2] - u[2]*v[1]; w[1] = u[2]*v[0] - u[0]*v[2]; w[2] = u[0]*v[1] - u[1]*v[0]; return w;}
 template <typename T> T stp (const Vec<3,T> &u, const Vec<3,T> &v, const Vec<3,T> &w) {return dot(u,cross(v,w));}
+template <typename T> bool right_handed (const Vec<3,T> &u, const Vec<3,T> &v, const Vec<3,T> &w) {return stp(u,v,w) >= 0;}
 template <int m, int n, typename T> Vec<m,T> project (const VecnT &u) {Vec<m,T> v; for (int i = 0; i < m; i++) v[i] = (i<n) ? u[i] : 0; return v;}
 template <typename T> Vec<2,T> perp (const Vec<2,T> &u) {return Vec<2,T>(-u[1],u[0]);}
+inline Vec<2> reduce_xy(const Vec<3>& v) { return Vec<2>(v[0],v[1]); }
+inline Vec<3> expand_xy(const Vec<2>& v) { return Vec<3>(v[0],v[1],0); }
+tpl void serializer_vec(gzFile fp, VecnT& v, bool save) { for(int i=0; i<3; i++) serializer(fp, v[i], save); }
+tpl inline bool is_bullshit(const VecnT& v) { for (int i=0; i<n; i++) { if (v[i] > 1e100 || v[i] < -1e100 || v[i] != v[i]) return true; } return false; }
 
 #if defined(_AVX)
 #if !defined(_WIN32)
@@ -162,12 +170,12 @@ public:
     static Mat rows (VecnT x, VecnT y, VecnT z) { Mat<3,n,T> M; for(int i = 0; i < n; i++) { M.col(i)[0] = x[i]; M.col(i)[1] = y[i]; M.col(i)[2] = z[i];} return M; }
     static Mat rows (VecnT x, VecnT y, VecnT z, VecnT w) { Mat<4,n,T> M; for(int i = 0; i < n; i++) { M.col(i)[0] = x[i]; M.col(i)[1] = y[i]; M.col(i)[2] = z[i]; M.col(i)[3] = w[i];} return M; }
     VecnT row (int i) const {VecnT R; for(int col = 0; col < n; ++col) { R[col] = c[col][i]; } return R; }
+    void set_row(int i, const VecnT& v) { for(int col = 0; col < n; ++col) c[col][i] = v[col]; }
 
-
-    T &operator() (int i, int j) {return c[j][i];}
-    const T &operator() (int i, int j) const {return c[j][i];}
-    VecmT &col (int j) {return c[j];}
-    const VecmT &col (int j) const {return c[j];}
+    inline T &operator() (int i, int j) {return c[j][i];}
+    inline const T &operator() (int i, int j) const {return c[j][i];}
+    inline VecmT &col (int j) {return c[j];}
+    inline const VecmT &col (int j) const {return c[j];}
     MatnmT t () const {return transpose(*this);}
 	// const MatTransposed<m,n,T>& t () const {return reinterpret_cast<const MatTransposed<m,n,T>&>(*this);}
     MatmnT inv () const {return inverse(*this);}
@@ -196,7 +204,11 @@ template <typename T> T wedge (const Vec<2,T> &u, const Vec<2,T> &v) {return u[0
 template <typename T> Mat<3,3,T> inverse (const Mat<3,3,T> &A) {return Mat<3,3,T>(cross(A.col(1),A.col(2)), cross(A.col(2),A.col(0)), cross(A.col(0),A.col(1))).t()/det(A);}
 template <int n, typename T> MatnnT diag (const VecnT &u) {MatnnT A = MatnnT(0); for (int j = 0; j < n; j++) A(j,j) = u[j]; return A;}
 tpl MatmnT outer (const VecmT &u, const VecnT &v) {MatmnT A; for (int j = 0; j < n; j++) A.col(j) = u*v[j]; return A;}
+tpl T inner (const MatmnT &a, const MatmnT& b) { T r=0; for (int j=0; j<n; j++) for (int i=0; i<m; i++) r+=a.col(j)[i]*b.col(j)[i]; return r;}
 tpl std::ostream &operator<< (std::ostream &out, const MatmnT &A) {MatnmT At = transpose(A); out << "(" << std::endl; for (int i = 0; i < m; i++) out << "    " << At.col(i) << (i+1==m?"":",") << std::endl; out << ")"; return out;}
+inline Mat<2,2> reduce_xy (const Mat<3,3>& M) { return Mat<2,2> (Vec2(M(0,0),M(0,1)),Vec2(M(1,0),M(1,1))); }
+inline Mat<3,3> expand_xy (const Mat<2,2>& M) { return Mat<3,3> (Vec3(M(0,0),M(0,1),0),Vec3(M(1,0),M(1,1),0),Vec3(0,0,0)); }
+tpl MatmnT max (const MatmnT& a, const MatmnT& b) { MatmnT c; for (int i = 0; i < m; i++) for (int j = 0; j < n; j++) c(i,j) = std::max(a(i,j), b(i,j)); return c; }
 
 // Frobenius norm
 tpl T norm2_F (const MatmnT &A) {T a = 0; for (int j = 0; j < n; j++) a += norm2(A.col(j)); return a;}
@@ -220,14 +232,18 @@ template <int n> struct Eig {
     Vec<n> l;
 };
 
+template <int n> Vec<n> eigen_values (const Mat<n,n>& A);
 template <int n> Eig<n> eigen_decomposition (const Mat<n,n> &A);
-template<> Eig<2> eigen_decomposition<2>(const Mat2x2 &A);
 
 template <int m, int n> struct SVD {
     Mat<m,m> U;
     Vec<n> s;
     Mat<n,n> Vt;
 };
+
+template <int m, int n> Vec<n> solve_llsq(const Mat<m,n> &A, const Vec<m>& b);
+template <int n> Vec<n> solve_symmetric(const Mat<n,n>& A, const Vec<n>& b);
+template <int n> Mat<n,n> get_positive (const Mat<n,n> &A);
 
 template <int m, int n> SVD<m,n> singular_value_decomposition (const Mat<m,n> &A);
 template<> SVD<3,2> singular_value_decomposition<3,2> (const Mat<3,2> &A);
@@ -276,6 +292,9 @@ template <int m, int n, int o, typename T> Mat<m,o,T> operator* (const MatTransp
 	}
 	return C;
 }
+
+Eig<3> eigen3(const Mat3x3 &B);
+
 
 /*
 template <int m, int n, int o, typename T> Mat<m,o,T> operator* (const MatTransposed<n,m,T> &A, const MatTransposed<o,n,T> &B) 

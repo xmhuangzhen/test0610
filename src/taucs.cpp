@@ -26,9 +26,14 @@
 
 #include "taucs.hpp"
 #include "timer.hpp"
+#include "display.hpp"
+#include "alglib/solvers.h"
 #include <cstdlib>
 #include <iostream>
 using namespace std;
+using namespace alglib;
+
+vector<Node*>* debug_nodes = 0;
 
 extern "C" {
 #include "taucs.h"
@@ -65,7 +70,7 @@ taucs_ccs_matrix *sparse_to_taucs (const SpMat<double> &As) {
     int n = As.n;
     int nnz = 0;
     for (int i = 0; i < n; i++) {
-        for (int k = 0; k < As.rows[i].indices.size(); k++) {
+        for (int k = 0; k < (int)As.rows[i].indices.size(); k++) {
             int j = As.rows[i].indices[k];
             if (j < i)
                 continue;
@@ -76,7 +81,7 @@ taucs_ccs_matrix *sparse_to_taucs (const SpMat<double> &As) {
     int pos = 0;
     for (int i = 0; i < n; i++) {
         At->colptr[i] = pos;
-        for (int k = 0; k < As.rows[i].indices.size(); k++) {
+        for (int k = 0; k < (int)As.rows[i].indices.size(); k++) {
             int j = As.rows[i].indices[k];
             if (j < i)
                 continue;
@@ -94,7 +99,7 @@ template <int m> taucs_ccs_matrix *sparse_to_taucs (const SpMat< Mat<m,m> > &As)
     int n = As.n;
     int nnz = 0;
     for (int i = 0; i < n; i++) {
-        for (int jj = 0; jj < As.rows[i].indices.size(); jj++) {
+        for (int jj = 0; jj < (int)As.rows[i].indices.size(); jj++) {
             int j = As.rows[i].indices[jj];
             if (j < i)
                 continue;
@@ -107,7 +112,7 @@ template <int m> taucs_ccs_matrix *sparse_to_taucs (const SpMat< Mat<m,m> > &As)
     for (int i = 0; i < n; i++) {
         for (int k = 0; k < m; k++) {
             At->colptr[i*m+k] = pos;
-            for (int jj = 0; jj < As.rows[i].indices.size(); jj++) {
+            for (int jj = 0; jj < (int)As.rows[i].indices.size(); jj++) {
                 int j = As.rows[i].indices[jj];
                 if (j < i)
                     continue;
@@ -124,14 +129,77 @@ template <int m> taucs_ccs_matrix *sparse_to_taucs (const SpMat< Mat<m,m> > &As)
     return At;
 }
 
+vector<double> alglib_linear_solve(const SpMat<double>& A, const vector<double>& b) {
+    const int n = b.size();
+    real_2d_array M;
+    real_1d_array x,c;
+    M.setlength(n,n);
+    x.setlength(n);
+    c.setcontent(n,&b[0]);
+    for (int i = 0; i < A.m; i++) {
+        const SpVec<double> &row = A.rows[i];
+        for (int j = 0; j < A.n; j++)
+            M(i,j) = 0;
+        for (size_t jj = 0; jj < row.indices.size(); jj++) {
+            int j = row.indices[jj];
+            M(i,j) = row.entries[jj];
+        }
+    }
+    
+    ae_int_t info;
+    densesolverreport rep;    
+    rmatrixsolve(M,n,c,info,rep,x);
+    
+    vector<double> ret(n);
+    for (int i=0; i<n; i++)
+        ret[i] = x[i];
+    
+    return ret;
+}
+
+template<int C>
+vector<Vec<C> > alglib_linear_solve_vec(const SpMat<Mat<C,C> >& A, const vector<Vec<C> >& b) {
+    const int n = b.size()*C;
+    real_2d_array M;
+    real_1d_array x,c;
+    M.setlength(n,n);
+    x.setlength(n);
+    c.setlength(n);
+    for (int i=0; i<n; i++)
+        c[i] = b[i/C][i%C];
+    for (int i = 0; i < A.m; i++) {
+        const SpVec<Mat<C,C> > &row = A.rows[i];
+        for (size_t jj = 0; jj < row.indices.size(); jj++) {
+            int j = row.indices[jj];
+            for (int si=0; si<C; si++)
+                for (int sj=0; sj<C; sj++)
+                    M(i*C+si,j*C+sj) = row.entries[jj](si,sj);
+        }
+    }
+
+    ae_int_t info;
+    densesolverreport rep;    
+    rmatrixsolve(M,n,c,info,rep,x);
+    
+    vector<Vec<C> > ret(n);
+    for (int i=0; i<n; i++)
+        ret[i/C][i%C] = x[i];
+    
+    return ret;
+}
+
 vector<double> taucs_linear_solve (const SpMat<double> &A, const vector<double> &b) {
+    if (b.size() < 20) 
+        return alglib_linear_solve(A,b);
+    
     // taucs_logfile("stdout");
     taucs_ccs_matrix *Ataucs = sparse_to_taucs(A);
     vector<double> x(b.size());
     char *options[] = {(char*)"taucs.factor.LLT=true", NULL};
     int retval = taucs_linsolve(Ataucs, NULL, 1, &x[0], (double*)&b[0], options, NULL);
     if (retval != TAUCS_SUCCESS) {
-        cerr << "Error: TAUCS failed with return value " << retval << endl;
+        cerr << "Error: TAUCS(scalar) failed with return value " << retval << endl;
+        segfault();
         exit(EXIT_FAILURE);
     }
     taucs_ccs_free(Ataucs);
@@ -140,13 +208,17 @@ vector<double> taucs_linear_solve (const SpMat<double> &A, const vector<double> 
 
 template <int m> vector< Vec<m> > taucs_linear_solve
     (const SpMat< Mat<m,m> > &A, const vector< Vec<m> > &b) {
+    if (b.size() < 6) 
+        return alglib_linear_solve_vec(A,b);
+    
     // taucs_logfile("stdout");
     taucs_ccs_matrix *Ataucs = sparse_to_taucs(A);
     vector< Vec<m> > x(b.size());
     char *options[] = {(char*)"taucs.factor.LLT=true", NULL};
     int retval = taucs_linsolve(Ataucs, NULL, 1, &x[0], (double*)&b[0], options, NULL);
     if (retval != TAUCS_SUCCESS) {
-        cerr << "Error: TAUCS failed with return value " << retval << endl;
+        cerr << "Error: TAUCS(vector) failed with return value " << retval << endl;
+        segfault();
         exit(EXIT_FAILURE);
     }
     taucs_ccs_free(Ataucs);

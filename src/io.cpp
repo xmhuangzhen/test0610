@@ -38,6 +38,10 @@
 #include <sstream>
 using namespace std;
 
+
+const int FILE_VERSION = 1;
+
+
 // OBJ meshes
 
 void get_valid_line (istream &in, string &line) {
@@ -104,13 +108,15 @@ void load_obj (Mesh &mesh, const string &filename) {
         if (keyword == "vt") {
             Vec2 u;
             linestream >> u[0] >> u[1];
+            mesh.add(new Vert(expand_xy(u)));
+        } else if (keyword == "ms") {
+            Vec3 u;
+            linestream >> u[0] >> u[1] >> u[2];
             mesh.add(new Vert(u));
-        } else if (keyword == "vl") {
-            linestream >> mesh.verts.back()->label;
         } else if (keyword == "v") {
             Vec3 x;
             linestream >> x[0] >> x[1] >> x[2];
-            mesh.add(new Node(x, Vec3(0)));
+            mesh.add(new Node(x, x, Vec3(0), 0, 0, false));
         } else if (keyword == "ny") {
             Vec3 &y = mesh.nodes.back()->y;
             linestream >> y[0] >> y[1] >> y[2];
@@ -122,13 +128,13 @@ void load_obj (Mesh &mesh, const string &filename) {
         } else if (keyword == "e") {
             int n0, n1;
             linestream >> n0 >> n1;
-            mesh.add(new Edge(mesh.nodes[n0-1], mesh.nodes[n1-1]));
+            mesh.add(new Edge(mesh.nodes[n0-1], mesh.nodes[n1-1], 0, 0));
         } else if (keyword == "ea") {
             linestream >> mesh.edges.back()->theta_ideal;
         } else if (keyword == "ed") {
             linestream >> mesh.edges.back()->damage;
-        } else if (keyword == "el") {
-            linestream >> mesh.edges.back()->label;
+        } else if (keyword == "ep") {
+            linestream >> mesh.edges.back()->preserve;
         } else if (keyword == "f") {
             vector<Vert*> verts;
             vector<Node*> nodes;
@@ -139,27 +145,31 @@ void load_obj (Mesh &mesh, const string &filename) {
                 char c;
                 wstream >> n >> c >> v;
                 nodes.push_back(mesh.nodes[n-1]);
-                if (wstream)
+                if (wstream) {
                     verts.push_back(mesh.verts[v-1]);
-                else if (!nodes.back()->verts.empty())
+                } else if (!nodes.back()->verts.empty()) {
                     verts.push_back(nodes.back()->verts[0]);
-                else {
-                    verts.push_back(new Vert(project<2>(nodes.back()->x),
-                                             nodes.back()->label));
+                } else {
+                	verts.push_back(new Vert(nodes.back()->x));
                     mesh.add(verts.back());
                 }
             }
-            for (int v = 0; v < verts.size(); v++)
+            for (int v = 0; v < (int)verts.size(); v++)
                 connect(verts[v], nodes[v]);
             vector<Face*> faces = triangulate(verts);
-            for (int f = 0; f < faces.size(); f++)
+            for (int f = 0; f < (int)faces.size(); f++)
                 mesh.add(faces[f]);
-        } else if (keyword == "tl" || keyword == "fl") {
-            linestream >> mesh.faces.back()->label;
-        } else if (keyword == "ts" || keyword == "fs") {
-            Mat2x2 &S = mesh.faces.back()->S_plastic;
-            linestream >> S(0,0) >> S(0,1) >> S(1,0) >> S(1,1);
-        } else if (keyword == "td" || keyword == "fd") {
+        } else if (keyword == "tm") {
+            linestream >> mesh.faces.back()->flag;
+        } else if (keyword == "tp") {
+            Mat3x3 &S = mesh.faces.back()->Sp_bend;
+            for (int i=0; i<3; i++) for (int j=0; j<3; j++)
+            	linestream >> S(i,j);
+        } else if (keyword == "ts") {
+            Mat3x3 &S = mesh.faces.back()->Sp_str;
+            for (int i=0; i<3; i++) for (int j=0; j<3; j++)
+            	linestream >> S(i,j);
+        } else if (keyword == "td") {
             linestream >> mesh.faces.back()->damage;
         }
     }
@@ -168,7 +178,7 @@ void load_obj (Mesh &mesh, const string &filename) {
 }
 
 void load_objs (vector<Mesh*> &meshes, const string &prefix) {
-    for (int m = 0; m < meshes.size(); m++)
+    for (int m = 0; m < (int)meshes.size(); m++)
         load_obj(*meshes[m], stringf("%s_%02d.obj", prefix.c_str(), m));
 }
 
@@ -202,20 +212,21 @@ vector<Face*> triangulate (const vector<Vert*> &verts) {
     vector<Face*> tris;
     for (int j = 2; j < n; j++) {
         Vert *vert1 = verts[(i+j-1)%n], *vert2 = verts[(i+j)%n];
-        tris.push_back(new Face(vert0, vert1, vert2));
+        tris.push_back(new Face(vert0, vert1, vert2, Mat3x3(1), Mat3x3(0), 0, 0));
     }
     return tris;
 }
 
 void save_obj (const Mesh &mesh, const string &filename) {
+	set_indices((Mesh&)mesh);
     fstream file(filename.c_str(), ios::out);
-    for (int v = 0; v < mesh.verts.size(); v++) {
+    for (int v = 0; v < (int)mesh.verts.size(); v++) {
         const Vert *vert = mesh.verts[v];
-        file << "vt " << vert->u[0] << " " << vert->u[1] << endl;
-        if (vert->label)
-            file << "vl " << vert->label << endl;
+        file << "ms " << vert->u[0] << " " << vert->u[1] << " " << vert->u[2] << endl;
+        //if (vert->label)
+        //    file << "vl " << vert->label << endl;
     }
-    for (int n = 0; n < mesh.nodes.size(); n++) {
+    for (int n = 0; n < (int)mesh.nodes.size(); n++) {
         const Node *node = mesh.nodes[n];
         file << "v " << node->x[0] << " " << node->x[1] << " "
              << node->x[2] << endl;
@@ -228,31 +239,41 @@ void save_obj (const Mesh &mesh, const string &filename) {
         if (node->label)
             file << "nl " << node->label << endl;
     }
-    for (int e = 0; e < mesh.edges.size(); e++) {
+    for (int e = 0; e < (int)mesh.edges.size(); e++) {
         const Edge *edge = mesh.edges[e];
-        if (edge->theta_ideal || edge->label) {
+        if (edge->theta_ideal || edge->preserve) {
             file << "e " << edge->n[0]->index+1 << " " << edge->n[1]->index+1
                  << endl;
             if (edge->theta_ideal)
                 file << "ea " << edge->theta_ideal << endl;
             if (edge->damage)
                 file << "ed " << edge->damage << endl;
-            if (edge->label)
-                file << "el " << edge->label << endl;
+            if (edge->preserve)
+                file << "ep " << edge->preserve << endl;
         }
     }
-    for (int f = 0; f < mesh.faces.size(); f++) {
+    for (int f = 0; f < (int)mesh.faces.size(); f++) {
         const Face *face = mesh.faces[f];
         file << "f " << face->v[0]->node->index+1 << "/" << face->v[0]->index+1
              << " " << face->v[1]->node->index+1 << "/" << face->v[1]->index+1
              << " " << face->v[2]->node->index+1 << "/" << face->v[2]->index+1
              << endl;
-        if (face->label)
-            file << "tl " << face->label << endl;
-        if (norm2_F(face->S_plastic)) {
-            const Mat2x2 &S = face->S_plastic;
-            file << "ts " << S(0,0) << " " << S(0,1) << " " << S(1,0) << " "
-                 << S(1,1) << endl;
+        if (face->material && mesh.parent) {
+        	file << "tm " << find(face->material, mesh.parent->materials) << endl;
+        }
+        if (norm2_F(face->Sp_bend)) {
+            const Mat3x3 &S = face->Sp_bend;
+            file << "tp ";
+            for (int i=0; i<3; i++) for (int j=0; j<3; j++)
+            	file << S(i,j) << " ";
+           	file << endl;
+        }
+        if (norm2_F(face->Sp_str)) {
+            const Mat3x3 &S = face->Sp_str;
+            file << "ts ";
+            for (int i=0; i<3; i++) for (int j=0; j<3; j++)
+            	file << S(i,j) << " ";
+            file << endl;
         }
         if (face->damage)
             file << "td " << face->damage << endl;
@@ -260,8 +281,75 @@ void save_obj (const Mesh &mesh, const string &filename) {
 }
 
 void save_objs (const vector<Mesh*> &meshes, const string &prefix) {
-    for (int m = 0; m < meshes.size(); m++)
+    for (int m = 0; m < (int)meshes.size(); m++)
         save_obj(*meshes[m], stringf("%s_%02d.obj", prefix.c_str(), m));
+}
+
+template<> void serializer<Simulation>(Simulation& sim, Serialize& s, const string& n) {
+	for (size_t m = 0; m < sim.cloth_meshes.size(); m++) {
+    	sim.cloth_meshes[m]->serializer(s);
+    	if (s.load()) {
+    		compute_ms_data(*sim.cloth_meshes[m]);
+    	}
+    }
+	for (size_t m = 0; m < sim.obstacle_meshes.size(); m++)
+    	sim.obstacle_meshes[m]->serializer(s);
+}
+void serialize_header(Serialize& s) {
+	s.version = FILE_VERSION;
+    if (s.load() || s.check()) {
+		int sframe;    
+		double stime;
+		gzread(s.fp, &s.version, sizeof(int));
+    	gzread(s.fp, &sframe, sizeof(int));
+    	gzread(s.fp, &stime, sizeof(double));
+    	if (s.load())
+    		sim.time = stime;
+    } else {
+    	gzwrite(s.fp, &s.version, sizeof(int));
+  		gzwrite(s.fp, &sim.frame, sizeof(int));
+  		gzwrite(s.fp, &sim.time, sizeof(double));
+	} 	
+}
+
+template<class T>
+bool load_state (T& state, const string &prefix) {
+    Serialize s;
+    s.fp = gzopen( (prefix+".bin").c_str(), "r");
+    if (!s.fp) {
+    	return false;
+    }    
+    s.mode = Serialize::Load;
+    serialize_header(s);
+    serializer(state, s, "state");
+    gzclose(s.fp);
+    return true;
+}
+
+template<class T>
+void save_state (T& state, const string &prefix) {
+    Serialize s;
+    s.fp = gzopen( (prefix+".bin").c_str(), "w3");
+    if (!s.fp) {
+    	cout << "can't open " << prefix << ".bin" << endl;
+    	return;
+    }
+    s.mode = Serialize::Save;
+	serialize_header(s);
+    serializer(state, s, "state");
+    gzclose(s.fp);
+}
+template bool load_state<Simulation>(Simulation&, const string&);
+template void save_state<Simulation>(Simulation&, const string&);
+
+string obtain_subframe_id() {
+	// build consistent subframe indices
+	static int id = 0, lastframe = -1;
+	if (lastframe != sim.frame) {
+		lastframe = sim.frame;
+		id = 0;
+	}
+	return stringf("%d_%d",sim.frame, id++);
 }
 
 void save_transformation (const Transformation &tr, const string &filename) {
@@ -288,14 +376,14 @@ void save_png (const char *filename, int width, int height,
 void save_screenshot (const string &filename) {
     int w = 0, h = 0;
     for (int s = 0; s < 3; s++) {
-        glutSetWindow(subwindows[s]);
+        glutSetWindow(Pane::panes[s].window);
         w += glutGet(GLUT_WINDOW_WIDTH);
         h = max(h, glutGet(GLUT_WINDOW_HEIGHT));
     }
     unsigned char *pixels = new unsigned char[w*h*3];
     int x = 0;
     for (int s = 0; s < 3; s++) {
-        glutSetWindow(subwindows[s]);
+        glutSetWindow(Pane::panes[s].window);
         int wsub = glutGet(GLUT_WINDOW_WIDTH),
             hsub = glutGet(GLUT_WINDOW_HEIGHT);
         unsigned char *pixelsub = new unsigned char[wsub*hsub*3];
@@ -367,6 +455,7 @@ void save_png (const char *filename, int width, int height,
 }
 
 void ensure_existing_directory (const std::string &path) {
+    return;
     using namespace boost::filesystem;
     if (!exists(path))
         create_directory(path);

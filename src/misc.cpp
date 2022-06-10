@@ -53,13 +53,12 @@ void merge_meshes (const vector<string> &args) {
     assert(meshm.nodes.size() == meshw.nodes.size());
     Mesh mesh;
     double merge_dist = args.size()==4 ? atof(args[3].c_str()) : 1e-2;
-    for (int n = 0; n < meshm.nodes.size(); n++) {
-        Vert *vert = new Vert(project<2>(meshm.nodes[n]->x),
-                              meshm.nodes[n]->label);
+    for (int n = 0; n < (int)meshm.nodes.size(); n++) {
+        Vert *vert = new Vert(meshm.nodes[n]->x);
         mesh.add(vert);
         const Vec3 x = meshw.nodes[n]->x;
         Node *node = NULL;
-        for (int n2 = 0; n2 < mesh.nodes.size(); n2++) {
+        for (int n2 = 0; n2 < (int)mesh.nodes.size(); n2++) {
             Node *node2 = mesh.nodes[n2];
             if (norm2(node2->x - x) < sq(merge_dist)) {
                 node = node2;
@@ -67,18 +66,19 @@ void merge_meshes (const vector<string> &args) {
             }
         }
         if (node == NULL) {
-            node = new Node(x, Vec3(0));
+            node = new Node(x, x, Vec3(0), 0, 0, false);
             mesh.add(node);
         }
         if (!node->label)
             node->label = meshw.nodes[n]->label;
         connect(vert, node);
     }
-    for (int f = 0; f < meshm.faces.size(); f++) {
+    for (int f = 0; f < (int)meshm.faces.size(); f++) {
         const Face *face = meshm.faces[f];
         mesh.add(new Face(mesh.verts[face->v[0]->node->index],
                           mesh.verts[face->v[1]->node->index],
-                          mesh.verts[face->v[2]->node->index], face->label));
+                          mesh.verts[face->v[2]->node->index], 
+                          Mat3x3(1), Mat3x3(0), face->material, face->damage));
     }
     save_obj(mesh, args[2]);
 }
@@ -88,23 +88,26 @@ void split_meshes (const vector<string> &args) {
     Mesh mesh;
     load_obj(mesh, args[0]);
     Mesh meshm, meshw;
-    for (int v = 0; v < mesh.verts.size(); v++) {
+    for (int v = 0; v < (int)mesh.verts.size(); v++) {
         const Vert *vert = mesh.verts[v];
-        meshm.add(new Vert(vert->u, vert->label));
-        meshm.add(new Node(project<3>(vert->u), Vec3(0), vert->label));
+        meshm.add(new Vert(vert->u));
+        meshm.add(new Node(vert->u, vert->u, Vec3(0), 0, 0, false));
         connect(meshm.verts.back(), meshm.nodes.back());
-        meshw.add(new Vert(vert->u, vert->node->label));
-        meshw.add(new Node(vert->node->x, Vec3(0), vert->node->label));
+        meshw.add(new Vert(vert->u));
+        meshw.add(new Node(vert->node->x, vert->node->x, Vec3(0), 
+        	               vert->node->label, vert->node->flag, false));
         connect(meshw.verts.back(), meshw.nodes.back());
     }
-    for (int f = 0; f < mesh.faces.size(); f++) {
+    for (int f = 0; f < (int)mesh.faces.size(); f++) {
         const Face *face = mesh.faces[f];
         meshm.add(new Face(meshm.verts[face->v[0]->index],
                            meshm.verts[face->v[1]->index],
-                           meshm.verts[face->v[2]->index], face->label));
+                           meshm.verts[face->v[2]->index], 
+                           Mat3x3(1), Mat3x3(0), face->material, face->damage));
         meshw.add(new Face(meshw.verts[face->v[0]->index],
                            meshw.verts[face->v[1]->index],
-                           meshw.verts[face->v[2]->index], face->label));
+                           meshw.verts[face->v[2]->index], 
+                           Mat3x3(1), Mat3x3(0), face->material, face->damage));
     }
     save_obj(meshm, args[1]);
     save_obj(meshw, args[2]);

@@ -33,6 +33,7 @@
 #include <iomanip>
 #include <limits>
 #include <map>
+#include <signal.h>
 #include <sstream>
 using namespace std;
 
@@ -81,16 +82,35 @@ template <typename T> string name (const T *p) {
 }
 
 ostream &operator<< (ostream &out, const Vert *vert) {
-    out << "v:" << name(vert); return out;}
+	if (!vert)
+		out << "v:none";
+    else
+    	out << "v:" << name(vert); 
+    return out;
+}
 
 ostream &operator<< (ostream &out, const Node *node) {
-    out << "n:" << name(node) << node->verts; return out;}
+	if (!node)
+		out << "n:none";
+	else
+    	out << "n:" << name(node) << node->verts; 
+    return out;
+}
 
 ostream &operator<< (ostream &out, const Edge *edge) {
-    out << "e:" << name(edge) << "(" << edge->n[0] << "-" << edge->n[1] << ")"; return out;}
+    if (!edge)
+    	out << "e:none";
+    else 
+    	out << "e:" << name(edge) << "(" << edge->n[0] << "-" << edge->n[1] << ")"; 
+    return out;
+}
 
 ostream &operator<< (ostream &out, const Face *face) {
-    out << "f:" << name(face) << "(" << face->v[0] << "-" << face->v[1] << "-" << face->v[2] << ")"; return out;}
+	if (!face)
+		out << "f:none";
+	else
+    	out << "f:" << name(face) << "(" << face->v[0] << "-" << face->v[1] << "-" << face->v[2] << ")"; return out;
+}
 
 const double infinity = numeric_limits<double>::infinity();
 
@@ -117,20 +137,39 @@ bool is_seam_or_boundary (const Vert *v) {
 }
 
 bool is_seam_or_boundary (const Node *n) {
-    for (int e = 0; e < n->adje.size(); e++)
+    for (int e = 0; e < (int)n->adje.size(); e++)
         if (is_seam_or_boundary(n->adje[e]))
             return true;
     return false;
 }
 
 bool is_seam_or_boundary (const Edge *e) {
-    return !e->adjf[0] || !e->adjf[1] || edge_vert(e,0,0) != edge_vert(e,1,0);
+    return !e->adjf[0] || !e->adjf[1]
+        || edge_vert(e,0,0) != edge_vert(e,1,0)
+        || edge_vert(e,0,1) != edge_vert(e,1,1);
 }
 
 bool is_seam_or_boundary (const Face *f) {
     return is_seam_or_boundary(f->adje[0])
         || is_seam_or_boundary(f->adje[1])
         || is_seam_or_boundary(f->adje[2]);
+}
+
+bool is_seam (const Edge* e) {
+	return e->adjf[0] && e->adjf[1]
+        && (edge_vert(e,0,0) != edge_vert(e,1,0)
+            || edge_vert(e,0,1) != edge_vert(e,1,1));
+}
+
+void build_node_lookup(map<const Node*,Vec3>& nodemap, const vector<Mesh*>& meshes) {
+	for (size_t i=0; i<meshes.size(); i++)
+    	for (size_t j=0; j<meshes[i]->nodes.size(); j++)
+    		nodemap[meshes[i]->nodes[j]] = meshes[i]->nodes[j]->x;    
+}
+
+
+void segfault() {
+	raise(SIGSEGV);
 }
 
 void debug_save_meshes (const vector<Mesh*> &meshvec, const string &name,
@@ -140,8 +179,8 @@ void debug_save_meshes (const vector<Mesh*> &meshvec, const string &name,
         n = savecount[name];
     else
         savecount[name] = n;
-    save_objs(meshvec, stringf("tmp/%s%04d", name.c_str(), n));
-    savecount[name]++;
+    save_objs(meshvec, stringf("tmp/%s%d", name.c_str(), n));
+    savecount[name] = (savecount[name] + 1) % 10;
 }
 
 void debug_save_mesh (const Mesh &mesh, const string &name, int n) {
@@ -150,6 +189,53 @@ void debug_save_mesh (const Mesh &mesh, const string &name, int n) {
         n = savecount[name];
     else
         savecount[name] = n;
-    save_obj(mesh, stringf("tmp/%s%04d.obj", name.c_str(), n));
-    savecount[name]++;
+    save_obj(mesh, stringf("tmp/%s%d.obj", name.c_str(), n));
+    savecount[name] = (savecount[name] + 1) % 10;
 }
+
+template<class T>
+void serializer(T& v, Serialize& s, const string& name) { 
+	if (s.load())
+		gzread(s.fp, &v, sizeof(T));
+	else if (s.save())
+		gzwrite(s.fp, &v, sizeof(T));
+	else if (s.check()) {
+		T tmp;
+		gzread(s.fp, &tmp, sizeof(T));
+		if (tmp != v) {
+			cout << "Serialization check failed: " << name << ": file " << 
+					tmp << " mem " << v << std::endl;
+			cout << "difference is " << (v-tmp) << endl;
+			segfault();
+		}
+	}
+}
+
+template<class T> 
+void serializer_dvec(vector<T>& v, Serialize& s, const string& name) { 
+	serializer_array(v, s, name);
+	for(size_t i=0; i<v.size(); i++) 
+		serializer(v[i], s, name); 
+}
+
+template<int n> 
+void serializer_vec(Vec<n>& x, Serialize& s, const string& name) { 
+	for(int i=0; i<n; i++) 
+		serializer(x[i], s, name); 
+}
+
+template<int n> 
+void serializer_mat(Mat<n,n>& x, Serialize& s, const string& name) { 
+	for(int i=0; i<n; i++) 
+		serializer(x.col(i), s, name); 
+}
+
+template void serializer<int>(int&,Serialize&,const string&);
+template void serializer<double>(double&,Serialize&,const string&);
+template void serializer<bool>(bool&,Serialize&,const string&);
+template<> void serializer<Vec2>(Vec2& x, Serialize& s,const string& n) { return serializer_vec(x,s,n); }
+template<> void serializer<Vec3>(Vec3& x, Serialize &s,const string& n) { return serializer_vec(x,s,n); }
+template<> void serializer<Mat2x2>(Mat2x2& x, Serialize& s,const string& n) { return serializer_mat(x,s,n); }
+template<> void serializer<Mat3x3>(Mat3x3& x, Serialize& s,const string& n) { return serializer_mat(x,s,n); }
+template<> void serializer<vector<Vec3> >(vector<Vec3>& x, Serialize& s, const string& n) { return serializer_dvec(x,s,n); }
+template<> void serializer<vector<double> >(vector<double>& x, Serialize& s, const string& n) { return serializer_dvec(x,s,n); }

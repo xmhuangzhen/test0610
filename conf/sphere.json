@@ -34,5 +34,6 @@
         "motion": 0
     }],
     "gravity": [0, 0, -9.8],
+    "disable": ["popfilter" ],
     "magic": {"repulsion_thickness": 5e-3, "collision_stiffness": 1e6}
 }

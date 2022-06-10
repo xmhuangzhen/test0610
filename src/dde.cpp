@@ -124,8 +124,8 @@ Vec4 stretching_stiffness (const Mat2x2 &G, const StretchingSamples &samples) {
 }
 
 double bending_stiffness (const Edge *edge, int side,
-                          const BendingData &data, double initial_angle) {
-    double curv = edge->theta*edge->l/(edge->adjf[0]->a + edge->adjf[1]->a);
+                          const BendingData &data, double l, double theta, double initial_angle) {
+	double curv = theta * l /(edge->adjf[0]->a + edge->adjf[1]->a);
     double alpha = curv/2;
     double value = alpha*0.2; // because samples are per 0.05 cm^-1 = 5 m^-1
     if(value>4) value=4;
@@ -133,7 +133,7 @@ double bending_stiffness (const Edge *edge, int side,
     if(value_i<0)   value_i=0;
     if(value_i>3)   value_i=3;
     value-=value_i;
-    Vec2 du = edge_vert(edge, side, 1)->u - edge_vert(edge, side, 0)->u;
+    Vec3 du = edge_vert(edge, side, 1)->u - edge_vert(edge, side, 0)->u;
     double    bias_angle=(atan2f(du[1], du[0])+initial_angle)*4/M_PI;
     if(bias_angle<0)        bias_angle= -bias_angle;
     if(bias_angle>4)        bias_angle=8-bias_angle;

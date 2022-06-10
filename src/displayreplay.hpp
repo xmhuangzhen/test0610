@@ -31,5 +31,6 @@
 #include <vector>
 
 void display_replay (const std::vector<std::string> &args);
+void generate_obj (const std::vector<std::string> &args);
 
 #endif

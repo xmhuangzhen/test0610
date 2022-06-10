@@ -28,10 +28,10 @@
 #define NEAROBS_HPP
 
 #include "mesh.hpp"
+#include "collisionutil.hpp"
+#include <map>
 
-typedef std::pair<Vec3,Vec3> Plane;
-
-std::vector<Plane> nearest_obstacle_planes
-    (const Mesh &mesh, const std::vector<Mesh*> &obs_meshes);
+std::map<Node*,Plane> nearest_obstacle_planes 
+	(const std::vector<Node*> &nodes, const std::vector<AccelStruct*>& obs_accs);
 
 #endif

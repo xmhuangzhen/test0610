@@ -43,7 +43,7 @@ void evaluate_stretching_samples (StretchingSamples &samples,
 
 Vec4 stretching_stiffness (const Mat2x2 &G, const StretchingSamples &samples);
 
-double bending_stiffness (const Edge *edge, int side, const BendingData &data,
-                          double initial_angle=0);
+double bending_stiffness (const Edge *edge, int side, const BendingData &data, 
+						  double l, double theta, double initial_angle=0);
 
 #endif

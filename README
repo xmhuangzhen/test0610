@@ -1,5 +1,5 @@
 **********************************************************************
-      ARCSim v0.2.1: Adaptive Refining and Coarsening Simulator
+      ARCSim v0.3.1: Adaptive Refining and Coarsening Simulator
 
       Rahul Narain, Armin Samii, Tobias Pfaff, and James O'Brien
               {narain,samii,tpfaff,job}@cs.berkeley.edu
@@ -17,6 +17,21 @@ Singapore.
 Rahul Narain, Tobias Pfaff, and James F. O'Brien. "Folding and
 Crumpling Adaptive Sheets". ACM Transactions on Graphics,
 32(4):51:1-8, July 2013. Proceedings of ACM SIGGRAPH 2013, Anaheim.
+
+Tobias Pfaff, Rahul Narain, Juan Miguel de Joya, and James F. O'Brien.
+"Adaptive Tearing and Cracking of Thin Sheets". ACM Transaction on
+Graphics, 33(4):110:1-9, August 2014. Proceedings of ACM SIGGRAPH
+2014, Vancouver.
+
+======================================================================
+ Versions
+======================================================================
+
+Arcsim v0.2.x is the recommended codebase for cloth and thin shell
+simulation if you do *not* need the fracture component. It is faster
+and has a simpler structure.
+
+Arcsim v0.3.x is the recommended codebase for fracture dynamics.
 
 ======================================================================
  Usage
@@ -69,6 +84,11 @@ as follows.
     frames as fast as possible. The Home key returns to frame 0. If
     <sshot-dir> is given, the rendered images are also saved there
     upon playback.
+
+* generate <out-dir>
+   
+    Reads the simulation state of a previous "simulate" run, and 
+    generates obj files which can be used for rendering.
 
 ----------------------------------------------------------------------
  Using the OpenGL interface
@@ -157,6 +177,10 @@ The output of the simulation consists of a number of files:
 * conf.json is a copy of the scene file that was used to run the
   simulation. This is useful for resuming, replaying, and general
   future reference.
+
+* <frame>.bin is the full simulation state of frame <frame>. To
+  generate obj files from the simulation state, a post-processing run
+  of bin/arcsim generate <outdir> has to be executed.
 
 * <frame>_<i>.obj is the mesh for the <i>th cloth at the given frame
   number. A simulation may have multiple articles of cloth, e.g. the

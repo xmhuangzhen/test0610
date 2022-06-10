@@ -28,7 +28,7 @@ AOUTFLG   =
 RANLIB    = ranlib
 RM        = rm -rf
 
-LIBBLAS   = -framework vecLib
+LIBBLAS   = -framework Accelerate 
 LIBLAPACK =
 LIBMETIS  = -Lexternal/lib/darwin -lmetis
 

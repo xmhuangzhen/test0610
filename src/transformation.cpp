@@ -185,7 +185,7 @@ Quaternion normalize (const Quaternion &q) {
 }
 
 void clean_up_quaternions (Motion &motion) {
-    for (int p = 1; p < motion.points.size(); p++) {
+    for (int p = 1; p < (int)motion.points.size(); p++) {
         const Quaternion &q0 = motion.points[p-1].x.rotation;
         Quaternion &q1 = motion.points[p].x.rotation;
         double d = dot(q0.v, q1.v) + q0.s*q1.s;

@@ -31,7 +31,7 @@
 #include "constraint.hpp"
 
 std::vector<Constraint*> proximity_constraints
-    (const std::vector<Mesh*> &meshes, const std::vector<Mesh*> &obs_meshes,
-     double friction, double obs_friction);
+    (std::vector<Mesh*> &meshes, const std::vector<Mesh*> &obs_meshes,
+     double friction, double obs_friction, bool proxy_only = false, bool obs_only = false);
 
 #endif

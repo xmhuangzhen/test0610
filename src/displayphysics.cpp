@@ -56,22 +56,16 @@ static void idle () {
     redisplay();
 }
 
-extern void zoom (bool in);
-
 static void keyboard (unsigned char key, int x, int y) {
     unsigned char esc = 27, space = ' ';
     if (key == esc) {
         exit(EXIT_SUCCESS);
     } else if (key == space) {
-        ::running = !::running;
+    	::running = !::running;
     } else if (key == 's') {
         ::running = !::running;
         idle();
         ::running = !::running;
-    } else if (key == 'z') {
-        zoom(true);
-    } else if (key == 'x') {
-        zoom(false);
     }
 }
 
@@ -88,13 +82,16 @@ void display_physics (const vector<string> &args) {
     string outprefix = args.size()>1 ? args[1] : "";
     if (!outprefix.empty())
         ensure_existing_directory(outprefix);
-    init_physics(json_file, outprefix, false);
-    if (!outprefix.empty())
-        save(sim, 0);
+
     GlutCallbacks cb;
     cb.idle = idle;
     cb.keyboard = keyboard;
-    run_glut(cb);
+    init_physics(json_file, outprefix, false);
+    init_glut(cb);
+    init_relax();
+    if (!outprefix.empty())
+        save(sim, 0);
+    run_glut();
 }
 
 void display_resume (const vector<string> &args) {
@@ -106,11 +103,12 @@ void display_resume (const vector<string> &args) {
         cout << "    <resume-frame>: Frame number to resume from" << endl;
         exit(EXIT_FAILURE);
     }
-    init_resume(args);
     GlutCallbacks cb;
     cb.idle = idle;
     cb.keyboard = keyboard;
-    run_glut(cb);
+    init_resume(args);
+    init_glut(cb);
+    run_glut();
 }
 
 #else

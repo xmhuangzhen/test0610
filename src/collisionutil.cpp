@@ -30,20 +30,17 @@
 #include <omp.h>
 using namespace std;
 
-void collect_leaves (BVHNode *node, vector<BVHNode*> &leaves);
+void collect_leaves (BVHNode *node, map<const Face*,BVHNode*> &leaves);
 
 AccelStruct::AccelStruct (const Mesh &mesh, bool ccd):
-    tree((Mesh&)mesh, ccd), root(tree._root), leaves(mesh.faces.size()) {
+    tree((Mesh&)mesh, ccd), root(tree._root), leaves() {
     if (root)
         collect_leaves(root, leaves);
 }
 
-void collect_leaves (BVHNode *node, vector<BVHNode*> &leaves) {
+void collect_leaves (BVHNode *node, map<const Face*,BVHNode*> &leaves) {
     if (node->isLeaf()) {
-        int f = node->getFace()->index;
-        if (f >= leaves.size())
-            leaves.resize(f+1);
-        leaves[f] = node;
+    	leaves[node->getFace()] = node;
     } else {
         collect_leaves(node->getLeftChild(), leaves);
         collect_leaves(node->getRightChild(), leaves);
@@ -65,7 +62,7 @@ void mark_all_inactive (AccelStruct &acc) {
 
 void mark_active (AccelStruct &acc, const Face *face) {
     if (acc.root)
-        mark_ancestors(acc.leaves[face->index], true);
+        mark_ancestors(acc.leaves[face], true);
 }
 
 void mark_descendants (BVHNode *node, bool active) {
@@ -116,17 +113,19 @@ vector<BVHNode*> collect_upper_nodes (const vector<AccelStruct*> &accs, int n);
 void for_overlapping_faces (const vector<AccelStruct*> &accs,
                             const vector<AccelStruct*> &obs_accs,
                             double thickness, BVHCallback callback,
-                            bool parallel) {
+                            bool parallel, bool only_obs) {
     int nnodes = (int)ceil(sqrt(2*omp_get_max_threads()));
     vector<BVHNode*> nodes = collect_upper_nodes(accs, nnodes);
     int nthreads = omp_get_max_threads();
     omp_set_num_threads(parallel ? omp_get_max_threads() : 1);
 #pragma omp parallel for
-    for (int n = 0; n < nodes.size(); n++) {
-        for_overlapping_faces(nodes[n], thickness, callback);
-        for (int m = 0; m < n; m++)
-            for_overlapping_faces(nodes[n], nodes[m], thickness, callback);
-        for (int o = 0; o < obs_accs.size(); o++)
+    for (int n = 0; n < (int)nodes.size(); n++) {
+        if (!only_obs) {
+            for_overlapping_faces(nodes[n], thickness, callback);
+            for (int m = 0; m < n; m++)
+                for_overlapping_faces(nodes[n], nodes[m], thickness, callback);
+        }
+        for (int o = 0; o < (int)obs_accs.size(); o++)
             if (obs_accs[o]->root)
                 for_overlapping_faces(nodes[n], obs_accs[o]->root, thickness,
                                       callback);
@@ -143,8 +142,8 @@ void for_faces_overlapping_obstacles (const vector<AccelStruct*> &accs,
     int nthreads = omp_get_max_threads();
     omp_set_num_threads(parallel ? omp_get_max_threads() : 1);
 #pragma omp parallel for
-    for (int n = 0; n < nodes.size(); n++)
-        for (int o = 0; o < obs_accs.size(); o++)
+    for (int n = 0; n < (int)nodes.size(); n++)
+        for (int o = 0; o < (int)obs_accs.size(); o++)
             if (obs_accs[o]->root)
                 for_overlapping_faces(nodes[n], obs_accs[o]->root, thickness,
                                       callback);
@@ -154,12 +153,12 @@ void for_faces_overlapping_obstacles (const vector<AccelStruct*> &accs,
 vector<BVHNode*> collect_upper_nodes (const vector<AccelStruct*> &accs,
                                       int nnodes) {
     vector<BVHNode*> nodes;
-    for (int a = 0; a < accs.size(); a++)
+    for (int a = 0; a < (int)accs.size(); a++)
         if (accs[a]->root)
             nodes.push_back(accs[a]->root);
-    while (nodes.size() < nnodes) {
+    while ((int)nodes.size() < nnodes) {
         vector<BVHNode*> children;
-        for (int n = 0; n < nodes.size(); n++)
+        for (int n = 0; n < (int)nodes.size(); n++)
             if (nodes[n]->isLeaf())
                 children.push_back(nodes[n]);
             else {
@@ -175,29 +174,17 @@ vector<BVHNode*> collect_upper_nodes (const vector<AccelStruct*> &accs,
 
 vector<AccelStruct*> create_accel_structs (const vector<Mesh*> &meshes,
                                            bool ccd) {
-    vector<AccelStruct*> accs(meshes.size());
-    for (int m = 0; m < meshes.size(); m++)
-        accs[m] = new AccelStruct(*meshes[m], ccd);
+    vector<AccelStruct*> accs;
+    for (int m = 0; m < (int)meshes.size(); m++)
+        if (!meshes[m]->proxy)
+            accs.push_back(new AccelStruct(*meshes[m], ccd));
     return accs;
 }
 
 void destroy_accel_structs (vector<AccelStruct*> &accs) {
-    for (int a = 0; a < accs.size(); a++)
-        delete accs[a];
+    for (int a = 0; a < (int)accs.size(); a++)
+        if (accs[a])
+            delete accs[a];
 }
-
-template <typename Prim>
-int find_mesh (const Prim *p, const vector<Mesh*> &meshes) {
-    for (int m = 0; m < meshes.size(); m++) {
-        const vector<Prim*> &ps = get<Prim>(*meshes[m]);
-        if (p->index < ps.size() && p == ps[p->index])
-            return m;
-    }
-    return -1;
-}
-template int find_mesh (const Vert*, const vector<Mesh*>&);
-template int find_mesh (const Node*, const vector<Mesh*>&);
-template int find_mesh (const Edge*, const vector<Mesh*>&);
-template int find_mesh (const Face*, const vector<Mesh*>&);
 
 const vector<Mesh*> *meshes, *obs_meshes;

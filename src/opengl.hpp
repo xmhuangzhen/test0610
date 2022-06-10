@@ -35,7 +35,7 @@
 #include <OpenGL/gl.h>
 #include <OpenGL/glu.h>
 #include <OpenGL/glext.h>
-#include <GLUT/glut.h>
+#include <GL/freeglut.h>
 #elif defined(_WIN32)
 #include <Windows.h>
 #include <GL/gl.h>

@@ -73,10 +73,10 @@ void augmented_lagrangian_method (const NLConOpt &problem, OptOptions opt,
     ::problem->finalize(&x[0]);
 }
 
-static void add (real_1d_array &x, const vector<double> &y) {
-    for (int i = 0; i < y.size(); i++)
+/*static void add (real_1d_array &x, const vector<double> &y) {
+    for (int i = 0; i < (int) y.size(); i++)
         x[i] += y[i];
-}
+}*/
 
 inline double clamp_violation (double x, int sign) {
     return (sign<0) ? max(x, 0.) : (sign>0) ? min(x, 0.) : x;}
